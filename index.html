@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terminal Scene</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cream: #f0ebe0;
+    --dark: #0a0a08;
+    --amber: #c8892a;
+    --muted: #7a7060;
+  }
+
+  html { scroll-behavior: auto; }
+
+  body {
+    background: var(--dark);
+    font-family: 'Neue Haas Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* ── sticky canvas wrapper ── */
+  #sticky-wrap {
+    position: relative;
+    height: 500vh;
+  }
+
+  #canvas-container {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* ── overlay UI ── */
+  #ui {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 5vw;
+  }
+
+  .label {
+    display: inline-block;
+    font-size: clamp(0.6rem, 1vw, 0.75rem);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 1rem;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .headline {
+    font-size: clamp(2.5rem, 7vw, 6rem);
+    font-weight: 300;
+    line-height: 1.0;
+    color: var(--cream);
+    letter-spacing: -0.03em;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+
+  .headline em {
+    font-style: italic;
+    color: var(--amber);
+  }
+
+  .sub {
+    margin-top: 1.5rem;
+    font-size: clamp(0.8rem, 1.4vw, 1rem);
+    color: var(--muted);
+    max-width: 420px;
+    line-height: 1.6;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.8s ease 0.2s, transform 0.8s ease 0.2s;
+  }
+
+  /* phase visibility */
+  .phase { display: none; }
+  .phase.active .label,
+  .phase.active .headline,
+  .phase.active .sub {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── scroll hint ── */
+  #scroll-hint {
+    position: absolute;
+    bottom: 2.5rem;
+    right: 5vw;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 1;
+    transition: opacity 0.5s ease;
+  }
+
+  #scroll-hint .line {
+    width: 40px;
+    height: 1px;
+    background: var(--amber);
+    transform-origin: left;
+    animation: lineGrow 1.5s ease infinite;
+  }
+
+  @keyframes lineGrow {
+    0%, 100% { transform: scaleX(1); opacity: 1; }
+    50% { transform: scaleX(0.3); opacity: 0.4; }
+  }
+
+  /* ── nav ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 5vw;
+    mix-blend-mode: normal;
+  }
+
+  .nav-logo {
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--cream);
+    text-decoration: none;
+  }
+
+  .nav-cta {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dark);
+    background: var(--amber);
+    padding: 0.6rem 1.4rem;
+    text-decoration: none;
+    pointer-events: all;
+    transition: background 0.2s ease;
+  }
+
+  .nav-cta:hover { background: var(--cream); }
+
+  /* ── loading screen ── */
+  #loader {
+    position: fixed;
+    inset: 0;
+    background: var(--dark);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    transition: opacity 0.8s ease;
+  }
+
+  #loader.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loader-text {
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .loader-bar-wrap {
+    width: 200px;
+    height: 1px;
+    background: #222;
+    overflow: hidden;
+  }
+
+  .loader-bar {
+    height: 100%;
+    background: var(--amber);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  /* ── after scene — content below ── */
+  #below {
+    background: var(--cream);
+    padding: 10vh 5vw;
+    min-height: 50vh;
+  }
+
+  #below h2 {
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 300;
+    color: var(--dark);
+    letter-spacing: -0.03em;
+    margin-bottom: 1.5rem;
+  }
+
+  #below p {
+    font-size: 1rem;
+    color: #555;
+    max-width: 600px;
+    line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+
+<!-- loader -->
+<div id="loader">
+  <div class="loader-text">Loading scene</div>
+  <div class="loader-bar-wrap"><div class="loader-bar" id="loader-bar"></div></div>
+</div>
+
+<!-- nav -->
+<nav>
+  <a class="nav-logo" href="#">Your Brand</a>
+  <a class="nav-cta" href="#">Contact</a>
+</nav>
+
+<!-- sticky scroll section -->
+<div id="sticky-wrap">
+  <div id="canvas-container">
+    <!-- Three.js canvas goes here -->
+
+    <!-- overlay text -->
+    <div id="ui">
+
+      <!-- phase 0: cinematic side view -->
+      <div class="phase active" id="phase-0">
+        <span class="label">Ground Level</span>
+        <h1 class="headline">Built for the<br><em>long haul.</em></h1>
+        <p class="sub">Every mile tracked. Every load visible. From gate to dock.</p>
+      </div>
+
+      <!-- phase 1: rising camera -->
+      <div class="phase" id="phase-1">
+        <span class="label">Full Visibility</span>
+        <h1 class="headline">Your entire<br><em>yard. Live.</em></h1>
+        <p class="sub">Real-time aerial intelligence across every truck and trailer on site.</p>
+      </div>
+
+      <!-- phase 2: full overhead -->
+      <div class="phase" id="phase-2">
+        <span class="label">Command View</span>
+        <h1 class="headline">Single pane<br><em>of glass.</em></h1>
+        <p class="sub">One platform. Zero blind spots. Total operational control.</p>
+      </div>
+
+    </div>
+
+    <!-- scroll hint -->
+    <div id="scroll-hint">
+      <span class="line"></span>
+      Scroll to explore
+    </div>
+
+  </div>
+</div>
+
+<!-- content below the scroll scene -->
+<div id="below">
+  <h2>Ready to transform<br>your operations?</h2>
+  <p>Get in touch and we'll show you what your yard looks like in real-time.</p>
+</div>
+
+<!-- Three.js + Draco -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ─────────────────────────────────────────────
+// GLTFLoader (r128 inline)
+// ─────────────────────────────────────────────
+(function(){
+const e=THREE;
+class DRACOLoader{constructor(){this.decoderPath='';this.decoderConfig={};this.decoderBinary=null;this.decoderPending=null;this.workerLimit=4;this.workerPool=[];this.workerNextTaskID=1;this.workerSourceURL='';this.defaultAttributeIDs={position:'POSITION',normal:'NORMAL',color:'COLOR',uv:'TEX_COORD'};this.defaultAttributeTypes={position:'Float32Array',normal:'Float32Array',color:'Float32Array',uv:'Float32Array'}}setDecoderPath(e){this.decoderPath=e;return this}setDecoderConfig(e){this.decoderConfig=e;return this}setWorkerLimit(e){this.workerLimit=e;return this}load(e,t,n,r){const i=new e.FileLoader(this.manager);i.setPath(this.path);i.setResponseType('arraybuffer');i.setRequestHeader(this.requestHeader);i.setWithCredentials(this.withCredentials);i.load(e,e=>{this.parse(e,t,n,r)},n,r)}preload(){this._initDecoder();return this}dispose(){for(let e=0;e<this.workerPool.length;++e)this.workerPool[e].terminate();this.workerPool.length=0;return this}}
+// Minimal stub — actual Draco decode handled by THREE.DRACOLoader from CDN below
+window._DRACOLoaderStub=DRACOLoader;
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script>
+// ─────────────────────────────────────────────
+// SCENE SETUP
+// ─────────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const W = () => container.clientWidth;
+const H = () => container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(W(), H());
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a08);
+scene.fog = new THREE.Fog(0x0a0a08, 30, 120);
+
+const camera = new THREE.PerspectiveCamera(45, W() / H(), 0.1, 500);
+
+// Camera keyframes: [x, y, z, lookAt-x, lookAt-y, lookAt-z]
+const CAM_KEYS = [
+  // 0.0 — cinematic side, ground level
+  { pos: new THREE.Vector3(-18, 3.5, 12),  target: new THREE.Vector3(0, 1.5, 0) },
+  // 0.4 — rising, 3/4 view
+  { pos: new THREE.Vector3(-8,  14,  18),  target: new THREE.Vector3(0, 0, 0) },
+  // 0.7 — high diagonal
+  { pos: new THREE.Vector3(2,   28,  18),  target: new THREE.Vector3(0, 0, 0) },
+  // 1.0 — full overhead
+  { pos: new THREE.Vector3(2,   45,  0.5), target: new THREE.Vector3(0, 0, 0) },
+];
+
+// ─────────────────────────────────────────────
+// LIGHTING
+// ─────────────────────────────────────────────
+
+// Warm sunset fill
+const sunLight = new THREE.DirectionalLight(0xffb347, 3.5);
+sunLight.position.set(-30, 20, 10);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 0.1;
+sunLight.shadow.camera.far = 150;
+sunLight.shadow.camera.left = -40;
+sunLight.shadow.camera.right = 40;
+sunLight.shadow.camera.top = 40;
+sunLight.shadow.camera.bottom = -40;
+scene.add(sunLight);
+
+// Cool sky bounce
+const skyLight = new THREE.DirectionalLight(0x8ab4d8, 1.0);
+skyLight.position.set(10, 30, -10);
+scene.add(skyLight);
+
+// Ambient
+const ambient = new THREE.AmbientLight(0x3a3020, 2.0);
+scene.add(ambient);
+
+// Ground rim
+const rimLight = new THREE.PointLight(0xff8c00, 2.0, 40);
+rimLight.position.set(8, 1, -5);
+scene.add(rimLight);
+
+// ─────────────────────────────────────────────
+// GROUND PLANE
+// ─────────────────────────────────────────────
+const groundGeo = new THREE.PlaneGeometry(120, 120, 32, 32);
+
+// Procedural concrete texture via canvas
+const texCanvas = document.createElement('canvas');
+texCanvas.width = 512; texCanvas.height = 512;
+const ctx = texCanvas.getContext('2d');
+
+// Base concrete
+ctx.fillStyle = '#3d3830';
+ctx.fillRect(0, 0, 512, 512);
+
+// Subtle noise grain
+for(let i = 0; i < 15000; i++){
+  const x = Math.random()*512, y = Math.random()*512;
+  const b = Math.random() > 0.5 ? 20 : -15;
+  ctx.fillStyle = `rgba(${128+b},${118+b},${100+b},0.15)`;
+  ctx.fillRect(x, y, 2, 2);
+}
+
+// Yard lines
+ctx.strokeStyle = 'rgba(220,200,150,0.35)';
+ctx.lineWidth = 3;
+// horizontal stripes
+for(let y = 60; y < 512; y += 90){
+  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(512, y); ctx.stroke();
+}
+// vertical lane markers
+ctx.lineWidth = 2;
+ctx.setLineDash([20, 20]);
+for(let x = 80; x < 512; x += 100){
+  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 512); ctx.stroke();
+}
+ctx.setLineDash([]);
+
+const groundTex = new THREE.CanvasTexture(texCanvas);
+groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+groundTex.repeat.set(6, 6);
+
+const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ─────────────────────────────────────────────
+// DOCK BUILDING (simple box)
+// ─────────────────────────────────────────────
+const dockGeo = new THREE.BoxGeometry(18, 6, 8);
+const dockMat = new THREE.MeshLambertMaterial({ color: 0x2a2520 });
+const dock = new THREE.Mesh(dockGeo, dockMat);
+dock.position.set(12, 3, -12);
+dock.castShadow = true;
+dock.receiveShadow = true;
+scene.add(dock);
+
+// dock doors
+for(let i = 0; i < 3; i++){
+  const doorGeo = new THREE.BoxGeometry(3.5, 3.5, 0.2);
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x1a1510 });
+  const door = new THREE.Mesh(doorGeo, doorMat);
+  door.position.set(5 - i * 5.5, 2.0, -8.1);
+  scene.add(door);
+}
+
+// ─────────────────────────────────────────────
+// LOAD GLB MODEL
+// ─────────────────────────────────────────────
+let model = null;
+let modelLoaded = false;
+
+const dracoLoader = new THREE.DRACOLoader();
+dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+const loaderBar = document.getElementById('loader-bar');
+const loaderEl  = document.getElementById('loader');
+
+gltfLoader.load(
+  './scene-compressed.glb',
+  (gltf) => {
+    model = gltf.scene;
+
+    // Auto-center and scale
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+
+    // Scale so longest dimension = ~14 units
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale = 14 / maxDim;
+    model.scale.setScalar(scale);
+
+    // Re-center
+    box.setFromObject(model);
+    box.getCenter(center);
+    model.position.sub(center);
+
+    // Sit on ground
+    box.setFromObject(model);
+    model.position.y -= box.min.y;
+
+    // Shadows
+    model.traverse(child => {
+      if(child.isMesh){
+        child.castShadow = true;
+        child.receiveShadow = true;
+        // Boost material quality
+        if(child.material){
+          child.material.envMapIntensity = 0.5;
+        }
+      }
+    });
+
+    scene.add(model);
+    modelLoaded = true;
+
+    // Hide loader
+    loaderEl.classList.add('hidden');
+
+    // Show phase 0
+    document.getElementById('phase-0').style.display = 'block';
+    setTimeout(() => setPhase(0), 100);
+  },
+  (xhr) => {
+    const pct = (xhr.loaded / xhr.total) * 100;
+    loaderBar.style.width = pct + '%';
+  },
+  (err) => {
+    console.error('GLB load error:', err);
+    loaderEl.querySelector('.loader-text').textContent = 'Error loading model';
+  }
+);
+
+// Init all phases hidden
+['phase-0','phase-1','phase-2'].forEach(id => {
+  document.getElementById(id).style.display = 'none';
+});
+
+// ─────────────────────────────────────────────
+// SCROLL → CAMERA
+// ─────────────────────────────────────────────
+let currentPhase = -1;
+
+function setPhase(n) {
+  if(currentPhase === n) return;
+  ['phase-0','phase-1','phase-2'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.style.display = 'block';
+    el.classList.toggle('active', i === n);
+  });
+  currentPhase = n;
+}
+
+// Lerp between camera keyframes
+function lerpCam(t) {
+  // t = 0..1
+  const segments = CAM_KEYS.length - 1;
+  const raw = t * segments;
+  const idx = Math.min(Math.floor(raw), segments - 1);
+  const f   = raw - idx;
+
+  const a = CAM_KEYS[idx];
+  const b = CAM_KEYS[idx + 1];
+
+  // Smooth step
+  const sf = f * f * (3 - 2 * f);
+
+  camera.position.lerpVectors(a.pos, b.pos, sf);
+
+  const lookAt = new THREE.Vector3().lerpVectors(a.target, b.target, sf);
+  camera.lookAt(lookAt);
+}
+
+function getScrollProgress() {
+  const wrap = document.getElementById('sticky-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const scrollable = wrap.offsetHeight - window.innerHeight;
+  const scrolled = -rect.top;
+  return Math.max(0, Math.min(1, scrolled / scrollable));
+}
+
+// Scroll hint hide
+window.addEventListener('scroll', () => {
+  const hint = document.getElementById('scroll-hint');
+  if(window.scrollY > 50) hint.style.opacity = '0';
+  else hint.style.opacity = '1';
+}, { passive: true });
+
+// ─────────────────────────────────────────────
+// RESIZE
+// ─────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+  renderer.setSize(W(), H());
+});
+
+// ─────────────────────────────────────────────
+// RENDER LOOP
+// ─────────────────────────────────────────────
+let targetProgress = 0;
+let smoothProgress = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  targetProgress = getScrollProgress();
+  // Smooth damp
+  smoothProgress += (targetProgress - smoothProgress) * 0.06;
+
+  lerpCam(smoothProgress);
+
+  // Phase transitions
+  if(smoothProgress < 0.3) setPhase(0);
+  else if(smoothProgress < 0.65) setPhase(1);
+  else setPhase(2);
+
+  // Subtle model sway when idle
+  if(model && modelLoaded) {
+    model.rotation.y += 0.0003;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// Set initial cam
+lerpCam(0);
+animate();
+</script>
+</body>
+</html>
